@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="冰箱盤點">
+  <title>冰箱庫存盤點表</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: #f4f5f7;
+      color: #333333;
+      padding-bottom: 85px;
+    }
+    header {
+      background-color: #ffffff;
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-stat {
+      font-size: 13px;
+      font-weight: normal;
+      color: #e53935;
+      background: #ffebee;
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+    .filter-scroll {
+      display: flex;
+      overflow-x: auto;
+      padding: 12px 16px 4px;
+      gap: 8px;
+      scrollbar-width: none;
+    }
+    .filter-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .chip {
+      padding: 6px 14px;
+      border-radius: 18px;
+      background: #e8eaed;
+      color: #555555;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      border: none;
+      cursor: pointer;
+    }
+    .chip.active {
+      background: #2e7d32;
+      color: #ffffff;
+    }
+    .list-container {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .food-card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      border-left: 5px solid #4caf50;
+    }
+    .food-card.warning {
+      border-left-color: #ff9800;
+    }
+    .food-card.danger {
+      border-left-color: #f44336;
+    }
+    .card-info {
+      flex: 1;
+    }
+    .card-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #222222;
+      margin-bottom: 4px;
+    }
+    .card-meta {
+      font-size: 13px;
+      color: #777777;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #f0f0f0;
+      color: #666666;
+    }
+    .card-expiry {
+      text-align: right;
+      min-width: 80px;
+    }
+    .days-tag {
+      font-size: 13px;
+      font-weight: 700;
+      display: block;
+    }
+    .days-tag.normal { color: #2e7d32; }
+    .days-tag.warning { color: #e65100; }
+    .days-tag.danger { color: #c62828; }
+    .delete-btn {
+      margin-top: 6px;
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #888;
+      cursor: pointer;
+    }
+    .delete-btn:active {
+      background: #ffebee;
+      color: #c62828;
+      border-color: #ffcdd2;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 50px 20px;
+      color: #999999;
+      font-size: 14px;
+    }
+    .floating-add {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      background: #2e7d32;
+      color: #ffffff;
+      width: 56px;
+      height: 56px;
+      border-radius: 28px;
+      box-shadow: 0 4px 12px rgba(46,125,50,0.35);
+      border: none;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 99;
+    }
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      align-items: flex-end;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: #ffffff;
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
+      animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .modal-header {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-close {
+      font-size: 20px;
+      color: #888;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: #555555;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+      background: #fff;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: #2e7d32;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+    .form-row .form-group {
+      flex: 1;
+    }
+    .submit-btn {
+      width: 100%;
+      background: #2e7d32;
+      color: #ffffff;
+      border: none;
+      padding: 13px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+    .submit-btn:active {
+      background: #1b5e20;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-title">
+      <span>冰箱盤點表</span>
+      <span class="header-stat" id="urgentCount">0 項即期</span>
+    </div>
+  </header>
+
+  <div class="filter-scroll">
+    <button class="chip active" onclick="setFilter('全部', this)">全部</button>
+    <button class="chip" onclick="setFilter('即期優先', this)">即期優先</button>
+    <button class="chip" onclick="setFilter('冷藏室', this)">冷藏室</button>
+    <button class="chip" onclick="setFilter('冷凍庫', this)">冷凍庫</button>
+    <button class="chip" onclick="setFilter('蔬果室', this)">蔬果室</button>
+    <button class="chip" onclick="setFilter('門架', this)">門架</button>
+  </div>
+
+  <div class="list-container" id="foodList"></div>
+
+  <button class="floating-add" onclick="openModal()">＋</button>
+
+  <div class="modal-overlay" id="addModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>新增食材</span>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <form id="foodForm" onsubmit="handleAddItem(event)">
+        <div class="form-group">
+          <label>食材名稱</label>
+          <input type="text" id="itemName" placeholder="例如：嫩豆腐、雞蛋" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>存放分區</label>
+            <select id="itemZone">
+              <option value="冷藏室">冷藏室</option>
+              <option value="冷凍庫">冷凍庫</option>
+              <option value="蔬果室">蔬果室</option>
+              <option value="門架">門架</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>數量 / 規格</label>
+            <input type="text" id="itemQty" placeholder="例如：1盒、2顆" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>有效日期</label>
+          <input type="date" id="itemDate" required>
+        </div>
+        <button type="submit" class="submit-btn">存入冰箱</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'smart_fridge_items';
+    let currentFilter = '全部';
+
+    const defaultItems = [
+      { id: 1, name: '鮮奶', zone: '門架', qty: '1瓶', date: getFutureDateStr(2) },
+      { id: 2, name: '菠菜', zone: '蔬果室', qty: '1包', date: getFutureDateStr(3) },
+      { id: 3, name: '高達起司', zone: '冷藏室', qty: '1塊', date: getFutureDateStr(10) },
+      { id: 4, name: '雞胸肉', zone: '冷凍庫', qty: '2盒', date: getFutureDateStr(25) }
+    ];
+
+    function getFutureDateStr(days) {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split('T')[0];
+    }
+
+    function loadItems() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {
+          return defaultItems;
+        }
+      }
+      return defaultItems;
+    }
+
+    function saveItems(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    let items = loadItems();
+
+    function calculateDiffDays(dateStr) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const expDate = new Date(dateStr);
+      expDate.setHours(0,0,0,0);
+      const diffTime = expDate - today;
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function setFilter(category, btn) {
+      currentFilter = category;
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    }
+
+    function render() {
+      const listEl = document.getElementById('foodList');
+      listEl.innerHTML = '';
+
+      let urgentTotal = 0;
+      items.forEach(item => {
+        const days = calculateDiffDays(item.date);
+        if (days <= 3) urgentTotal++;
+      });
+      document.getElementById('urgentCount').innerText = `${urgentTotal} 項即期`;
+
+      let filtered = [...items];
+
+      if (currentFilter === '即期優先') {
+        filtered.sort((a, b) => calculateDiffDays(a.date) - calculateDiffDays(b.date));
+      } else if (currentFilter !== '全部') {
+        filtered = filtered.filter(i => i.zone === currentFilter);
+      }
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">此分類目前沒有食材 🎉</div>';
+        return;
+      }
+
+      filtered.forEach(item => {
+        const diff = calculateDiffDays(item.date);
+        let statusClass = '';
+        let statusTag = '';
+        let tagClass = '';
+
+        if (diff < 0) {
+          statusClass = 'danger';
+          statusTag = `過期 ${Math.abs(diff)} 天`;
+          tagClass = 'danger';
+        } else if (diff === 0) {
+          statusClass = 'danger';
+          statusTag = '今天到期！';
+          tagClass = 'danger';
+        } else if (diff <= 3) {
+          statusClass = 'warning';
+          statusTag = `剩 ${diff} 天`;
+          tagClass = 'warning';
+        } else {
+          statusClass = 'normal';
+          statusTag = `剩 ${diff} 天`;
+          tagClass = 'normal';
+        }
+
+        const card = document.createElement('div');
+        card.className = `food-card ${statusClass}`;
+        card.innerHTML = `
+          <div class="card-info">
+            <div class="card-name">${escapeHtml(item.name)}</div>
+            <div class="card-meta">
+              <span class="badge">${item.zone}</span>
+              <span>${escapeHtml(item.qty)}</span>
+            </div>
+          </div>
+          <div class="card-expiry">
+            <span class="days-tag ${tagClass}">${statusTag}</span>
+            <button class="delete-btn" onclick="removeItem(${item.id})">已吃完</button>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function openModal() {
+      document.getElementById('itemDate').value = getFutureDateStr(7);
+      document.getElementById('addModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('addModal').classList.remove('active');
+      document.getElementById('foodForm').reset();
+    }
+
+    function handleAddItem(e) {
+      e.preventDefault();
+      const name = document.getElementById('itemName').value.trim();
+      const zone = document.getElementById('itemZone').value;
+      const qty = document.getElementById('itemQty').value.trim();
+      const date = document.getElementById('itemDate').value;
+
+      if (!name || !date) return;
+
+      const newItem = {
+        id: Date.now(),
+        name,
+        zone,
+        qty,
+        date
+      };
+
+      items.unshift(newItem);
+      saveItems(items);
+      closeModal();
+      render();
+    }
+
+    function removeItem(id) {
+      items = items.filter(i => i.id !== id);
+      saveItems(items);
+      render();
+    }
+
+    // 初始化設定今天日期限制
+    const todayStr = new Date().toISOString().split('T')[0];
+    document.getElementById('itemDate').min = todayStr;
+
+    render();
+  </script>
+</body>
+</html>
