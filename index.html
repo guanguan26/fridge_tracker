@@ -313,7 +313,6 @@
 
   <button class="floating-add" onclick="openAddModal()">＋</button>
 
-  <!-- 新增食材彈窗 -->
   <div class="modal-overlay" id="addModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -349,7 +348,6 @@
     </div>
   </div>
 
-  <!-- 部分消耗修改彈窗 -->
   <div class="modal-overlay" id="consumeModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -363,7 +361,7 @@
           <button type="button" class="portion-btn" onclick="applyPortion('剩一半')">剩一半</button>
           <button type="button" class="portion-btn" onclick="applyPortion('剩1/4')">剩1/4</button>
           <button type="button" class="portion-btn" onclick="applyPortion('剩一點')">剩一點</button>
-          <button type="button" class="portion-btn" onclick="decrementNumber()">數量-1</button>
+          <button type="button" class="portion-btn" style="color: #2e7d32; font-weight: bold;" onclick="decrementNumber()">數量-1</button>
           <button type="button" class="portion-btn" style="color: #c62828;" onclick="confirmFinishCurrent()">全吃完了</button>
         </div>
 
@@ -539,23 +537,29 @@
 
     function decrementNumber() {
       if (!activeItemForConsume) return;
-      const match = activeItemForConsume.qty.match(/^(\\d+)(.*)$/);
+      const currentText = activeItemForConsume.qty;
+      
+      // 智慧比對：不論數字在前面或中間（例如 2盒、剩2包、3）
+      const match = currentText.match(/^(.*?)(\d+)(.*)$/);
+      
       if (match) {
-        let num = parseInt(match[1], 10);
-        const unit = match[2];
+        const prefix = match[1];
+        const num = parseInt(match[2], 10);
+        const suffix = match[3];
+
         if (num > 1) {
-          activeItemForConsume.qty = `${num - 1}${unit}`;
-          saveItems(items);
-          closeModal('consumeModal');
-          render();
-          return;
+          activeItemForConsume.qty = `${prefix}${num - 1}${suffix}`;
         } else {
-          removeItem(activeItemForConsume.id);
-          closeModal('consumeModal');
-          return;
+          // 原本只有 1 個，再減 1 就變成剩一點
+          activeItemForConsume.qty = '剩一點';
         }
+      } else {
+        // 沒有數字時的合理漸進推移
+        if (currentText.includes('3/4')) activeItemForConsume.qty = '剩一半';
+        else if (currentText.includes('一半')) activeItemForConsume.qty = '剩1/4';
+        else activeItemForConsume.qty = '剩一點';
       }
-      activeItemForConsume.qty = '剩一半';
+
       saveItems(items);
       closeModal('consumeModal');
       render();
