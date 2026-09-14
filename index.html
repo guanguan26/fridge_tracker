@@ -115,29 +115,48 @@
       background: #f0f0f0;
       color: #666666;
     }
-    .card-expiry {
+    .card-actions-wrapper {
       text-align: right;
-      min-width: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
     }
     .days-tag {
       font-size: 13px;
       font-weight: 700;
-      display: block;
     }
     .days-tag.normal { color: #2e7d32; }
     .days-tag.warning { color: #e65100; }
     .days-tag.danger { color: #c62828; }
-    .delete-btn {
-      margin-top: 6px;
-      background: none;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 3px 8px;
-      font-size: 11px;
-      color: #888;
-      cursor: pointer;
+    
+    .action-btn-group {
+      display: flex;
+      gap: 6px;
     }
-    .delete-btn:active {
+    .btn-action {
+      background: none;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #444;
+      transition: all 0.15s ease;
+    }
+    .btn-action:active {
+      transform: scale(0.96);
+    }
+    .btn-consume {
+      color: #2e7d32;
+      border-color: #a5d6a7;
+      background: #f1f8e9;
+      font-weight: 500;
+    }
+    .btn-finish {
+      color: #888888;
+    }
+    .btn-finish:active {
       background: #ffebee;
       color: #c62828;
       border-color: #ffcdd2;
@@ -249,6 +268,27 @@
     .submit-btn:active {
       background: #1b5e20;
     }
+    .portion-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .portion-btn {
+      padding: 10px;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      background: #fafafa;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      cursor: pointer;
+    }
+    .portion-btn:active {
+      background: #e8f5e9;
+      border-color: #2e7d32;
+      color: #2e7d32;
+    }
   </style>
 </head>
 <body>
@@ -256,7 +296,7 @@
   <header>
     <div class="header-title">
       <span>冰箱盤點表</span>
-      <span class="header-stat" id="urgentCount">0 項即期</span>
+      <span class="header-stat" id="urgentCount">0項即期</span>
     </div>
   </header>
 
@@ -271,18 +311,19 @@
 
   <div class="list-container" id="foodList"></div>
 
-  <button class="floating-add" onclick="openModal()">＋</button>
+  <button class="floating-add" onclick="openAddModal()">＋</button>
 
+  <!-- 新增食材彈窗 -->
   <div class="modal-overlay" id="addModal">
     <div class="modal-content">
       <div class="modal-header">
         <span>新增食材</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+        <button class="modal-close" onclick="closeModal('addModal')">✕</button>
       </div>
       <form id="foodForm" onsubmit="handleAddItem(event)">
         <div class="form-group">
           <label>食材名稱</label>
-          <input type="text" id="itemName" placeholder="例如：嫩豆腐、雞蛋" required>
+          <input type="text" id="itemName" placeholder="例如：鮮奶、起司、雞胸肉" required>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -296,7 +337,7 @@
           </div>
           <div class="form-group">
             <label>數量 / 規格</label>
-            <input type="text" id="itemQty" placeholder="例如：1盒、2顆" required>
+            <input type="text" id="itemQty" placeholder="例如：2盒、80%、剩一半" required>
           </div>
         </div>
         <div class="form-group">
@@ -308,14 +349,44 @@
     </div>
   </div>
 
+  <!-- 部分消耗修改彈窗 -->
+  <div class="modal-overlay" id="consumeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="consumeModalTitle">吃了一點</span>
+        <button class="modal-close" onclick="closeModal('consumeModal')">✕</button>
+      </div>
+      <div>
+        <label style="font-size: 13px; color: #555; margin-bottom: 8px; display: block;">快速設定剩餘狀態：</label>
+        <div class="portion-grid">
+          <button type="button" class="portion-btn" onclick="applyPortion('剩3/4')">剩3/4</button>
+          <button type="button" class="portion-btn" onclick="applyPortion('剩一半')">剩一半</button>
+          <button type="button" class="portion-btn" onclick="applyPortion('剩1/4')">剩1/4</button>
+          <button type="button" class="portion-btn" onclick="applyPortion('剩一點')">剩一點</button>
+          <button type="button" class="portion-btn" onclick="decrementNumber()">數量-1</button>
+          <button type="button" class="portion-btn" style="color: #c62828;" onclick="confirmFinishCurrent()">全吃完了</button>
+        </div>
+
+        <form id="consumeForm" onsubmit="handleSaveConsume(event)">
+          <div class="form-group">
+            <label>或手動修改剩餘數量 / 備註：</label>
+            <input type="text" id="consumeQtyInput" placeholder="例如：剩1盒、剩200g" required>
+          </div>
+          <button type="submit" class="submit-btn">更新庫存狀態</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
     const STORAGE_KEY = 'smart_fridge_items';
     let currentFilter = '全部';
+    let activeItemForConsume = null;
 
     const defaultItems = [
-      { id: 1, name: '鮮奶', zone: '門架', qty: '1瓶', date: getFutureDateStr(2) },
+      { id: 1, name: '鮮奶', zone: '門架', qty: '剩一半', date: getFutureDateStr(2) },
       { id: 2, name: '菠菜', zone: '蔬果室', qty: '1包', date: getFutureDateStr(3) },
-      { id: 3, name: '高達起司', zone: '冷藏室', qty: '1塊', date: getFutureDateStr(10) },
+      { id: 3, name: '高達起司', zone: '冷藏室', qty: '剩3/4', date: getFutureDateStr(10) },
       { id: 4, name: '雞胸肉', zone: '冷凍庫', qty: '2盒', date: getFutureDateStr(25) }
     ];
 
@@ -368,7 +439,7 @@
         const days = calculateDiffDays(item.date);
         if (days <= 3) urgentTotal++;
       });
-      document.getElementById('urgentCount').innerText = `${urgentTotal} 項即期`;
+      document.getElementById('urgentCount').innerText = `${urgentTotal}項即期`;
 
       let filtered = [...items];
 
@@ -391,7 +462,7 @@
 
         if (diff < 0) {
           statusClass = 'danger';
-          statusTag = `過期 ${Math.abs(diff)} 天`;
+          statusTag = `過期${Math.abs(diff)}天`;
           tagClass = 'danger';
         } else if (diff === 0) {
           statusClass = 'danger';
@@ -399,11 +470,11 @@
           tagClass = 'danger';
         } else if (diff <= 3) {
           statusClass = 'warning';
-          statusTag = `剩 ${diff} 天`;
+          statusTag = `剩${diff}天`;
           tagClass = 'warning';
         } else {
           statusClass = 'normal';
-          statusTag = `剩 ${diff} 天`;
+          statusTag = `剩${diff}天`;
           tagClass = 'normal';
         }
 
@@ -414,12 +485,15 @@
             <div class="card-name">${escapeHtml(item.name)}</div>
             <div class="card-meta">
               <span class="badge">${item.zone}</span>
-              <span>${escapeHtml(item.qty)}</span>
+              <span style="font-weight: 500; color: #333;">${escapeHtml(item.qty)}</span>
             </div>
           </div>
-          <div class="card-expiry">
+          <div class="card-actions-wrapper">
             <span class="days-tag ${tagClass}">${statusTag}</span>
-            <button class="delete-btn" onclick="removeItem(${item.id})">已吃完</button>
+            <div class="action-btn-group">
+              <button class="btn-action btn-consume" onclick="openConsumeModal(${item.id})">吃了一點</button>
+              <button class="btn-action btn-finish" onclick="removeItem(${item.id})">吃完</button>
+            </div>
           </div>
         `;
         listEl.appendChild(card);
@@ -435,14 +509,74 @@
         .replace(/'/g, "&#039;");
     }
 
-    function openModal() {
+    function openAddModal() {
       document.getElementById('itemDate').value = getFutureDateStr(7);
       document.getElementById('addModal').classList.add('active');
     }
 
-    function closeModal() {
-      document.getElementById('addModal').classList.remove('active');
-      document.getElementById('foodForm').reset();
+    function openConsumeModal(id) {
+      activeItemForConsume = items.find(i => i.id === id);
+      if (!activeItemForConsume) return;
+
+      document.getElementById('consumeModalTitle').innerText = `${activeItemForConsume.name}（目前：${activeItemForConsume.qty}）`;
+      document.getElementById('consumeQtyInput').value = activeItemForConsume.qty;
+      document.getElementById('consumeModal').classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+      if (modalId === 'addModal') document.getElementById('foodForm').reset();
+      if (modalId === 'consumeModal') activeItemForConsume = null;
+    }
+
+    function applyPortion(label) {
+      if (!activeItemForConsume) return;
+      activeItemForConsume.qty = label;
+      saveItems(items);
+      closeModal('consumeModal');
+      render();
+    }
+
+    function decrementNumber() {
+      if (!activeItemForConsume) return;
+      const match = activeItemForConsume.qty.match(/^(\\d+)(.*)$/);
+      if (match) {
+        let num = parseInt(match[1], 10);
+        const unit = match[2];
+        if (num > 1) {
+          activeItemForConsume.qty = `${num - 1}${unit}`;
+          saveItems(items);
+          closeModal('consumeModal');
+          render();
+          return;
+        } else {
+          removeItem(activeItemForConsume.id);
+          closeModal('consumeModal');
+          return;
+        }
+      }
+      activeItemForConsume.qty = '剩一半';
+      saveItems(items);
+      closeModal('consumeModal');
+      render();
+    }
+
+    function confirmFinishCurrent() {
+      if (!activeItemForConsume) return;
+      removeItem(activeItemForConsume.id);
+      closeModal('consumeModal');
+    }
+
+    function handleSaveConsume(e) {
+      e.preventDefault();
+      if (!activeItemForConsume) return;
+      const newQty = document.getElementById('consumeQtyInput').value.trim();
+      if (newQty) {
+        activeItemForConsume.qty = newQty;
+        saveItems(items);
+        closeModal('consumeModal');
+        render();
+      }
     }
 
     function handleAddItem(e) {
@@ -464,7 +598,7 @@
 
       items.unshift(newItem);
       saveItems(items);
-      closeModal();
+      closeModal('addModal');
       render();
     }
 
@@ -474,7 +608,6 @@
       render();
     }
 
-    // 初始化設定今天日期限制
     const todayStr = new Date().toISOString().split('T')[0];
     document.getElementById('itemDate').min = todayStr;
 
